@@ -59,9 +59,11 @@ export default function Authentication() {
             }
         } catch (err) {
 
-            console.log(err);
-            let message = (err.response.data.message);
-            setError(message);
+            console.error(err);
+
+  const message = err?.response?.data?.message || err.message || "Something went wrong!";
+  
+  setError(message);
         }
     }
 

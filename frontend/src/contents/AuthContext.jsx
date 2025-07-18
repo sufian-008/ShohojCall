@@ -1,49 +1,85 @@
-import axios from "axios"
-import {createContext, useContext, useState} from "react";
+import axios from "axios";
+import { createContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { StatusCodes } from "http-status-codes";
 
-export  const AuthContext = createContext({});
+// ✅ Context তৈরি
+export const AuthContext = createContext({});
 
-const  client = axios.create({
-     baseURL: "http://localhost:8000/api/v1",
-})
+// ✅ axios instance
+const client = axios.create({
+  baseURL: "http://localhost:8000/api/v1",
+});
 
-export const AuthProvider = ({children}) =>{
+export const AuthProvider = ({ children }) => {
+  const [userData, setUserData] = useState(null); // user info state
+  const navigate = useNavigate();
 
-    const authContext = useContext(AuthContext);
+  // ✅ REGISTER Function
+  const handleRegister = async (name, username, password) => {
+    try {
+      const res = await client.post("/register", {
+        name,
+        username,
+        password,
+      });
 
-    const  [userData, setUserData] = useState(authContext);
-
-    const handleRegister =  async (name, username, password) => {
-           try{
-              
-              let request = await client.post("/register", {
-                          name: name,
-                          username:username,
-                          password:password
-              })
-
-                 if(request.status === StatusCodes.CREATED){
-                      return request.data.message;
-                 }
-
-           } catch (err){
-                  throw err;  
-           }
+      if (res.status === StatusCodes.CREATED) {
+        return res.data.message; // success message
+      }
+    } catch (err) {
+      // যদি API error থাকে তাহলে সেটা throw করব
+      const msg =
+        err?.response?.data?.message || err.message || "Registration failed";
+      throw new Error(msg);
     }
+  };
 
-    const router =useNavigate();
+  // ✅ LOGIN Function
+  const handleLogin = async (username, password) => {
+    try {
+      const res = await client.post("/login", {
+        username,
+        password,
+      });
 
+      if (res.status === StatusCodes.OK) {
+        const { user, token } = res.data;
 
+        // Token save করবো localStorage এ
+        localStorage.setItem("token", token);
 
-    const data = {
-        userData, setUserData, handleRegister
+        // Context এ userData set করবো
+        setUserData(user);
+
+ 
+        navigate("/dashboard");
+
+        return user;
+      }
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message || err.message || "Login failed";
+      throw new Error(msg);
     }
+  };
 
-    return (
-        <AuthContext.Provider value={data}>
-            {children}
-        </AuthContext.Provider>
-    )
-}
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setUserData(null);
+    navigate("/login");
+  };
+
+  const data = {
+    userData,
+    setUserData,
+    handleRegister,
+    handleLogin,
+    handleLogout,
+  };
+
+  return (
+    <AuthContext.Provider value={data}>{children}</AuthContext.Provider>
+  );
+};
