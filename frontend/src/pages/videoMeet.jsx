@@ -22,7 +22,7 @@ export default function VideoMeetComponent() {
   let [videoAvailable, setVideoAvailable] = useState(true);
   let [audioAvailable, setAudioAvailable] = useState(true);
 
-  let [video, setVideo] = useState();
+  let [video, setVideo] = useState([]);
   let [audio, setAudio] = useState();
   let [screen, setScreen] = useState();
 
@@ -118,8 +118,42 @@ export default function VideoMeetComponent() {
     }
   }, [audio, video]);
 
+
+let getMessageFromServer = (frontId, message) =>{
+
+}
+
+// to do
+let addMessage =()=>{
+  
+}
+
+
   let connectToSocketServer =()=>{
+
     socketRef.current= io.connect(server_url, {secure: false});
+
+    socketRef.connect.on('signal', getMessageFromServer);
+
+    socketRef.connect.on("connect", ()=>{
+    socketRef.current.emit("join-call", window.location.href);
+    socketIdRef.current = socketIdRef.current.id;
+    socketRef.current.on("chat-message", addMessage)
+
+    socketRef.current.on("user-left", (id)=>{
+    // TODO
+    setVideo((videos)=>videos.filter((video)=>video.socketId !==id))
+
+  })
+
+     socketRef.current.on("user-joined", (id, clients)=>{
+      clients.forEach((socketListId)=>{
+
+        connection[socketListId] = new RTCPeerConnection(peerConfigConnections);
+      })
+     })
+
+    })
   }
 
   let getMedia =()=>{
