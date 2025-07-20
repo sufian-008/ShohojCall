@@ -7,7 +7,7 @@ import { io } from "socket.io-client";
 
 const server_url = "http://localhost:8000";
 
-var connection = {};
+var connections = {};
 
 const peerConfigConnections = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -93,7 +93,26 @@ export default function VideoMeetComponent() {
   }, []);
 
   let getUserMediaSuccess = (stream) => {
-    console.log("Stream received:", stream);
+         try {
+          window.localStream.getTracks().forEach(track => track.stop())
+         }catch (e) {console.log(e)}
+
+         window.localStream = stream;
+         localVideoRef.current.srcObject = stream;
+
+         for( let id in connections){
+          if( id ==socketIdRef.current) continue;
+
+          connections[id].addStream(window.localStream)
+
+          connections[id].createOffer().then((description)=>{
+             connections[id].setLocalDescription(description)
+             .then(()=>{
+               socketIdRef.current.emit("signal", id, JSON.stringify({"sdp":connections[id].localDescription}))
+             })
+             .catch(e => console.log(e))
+          })
+         }
   };
 
   let getUserMedia = () => {
@@ -120,7 +139,25 @@ export default function VideoMeetComponent() {
 
 
 let getMessageFromServer = (frontId, message) =>{
+      var signal  = JSON.parse(message)
 
+      if(fromId !== socketIdRef.current){
+              if(signal.sdp){
+                connections[fromId].setRemoteDescription(new RTCSessionDescription(signal.sdp)).then(()=>{
+                  if(signal.sdp.type == "offer"){
+                    connections[fromId].createAnswer().then((description)=>{
+                      connections[fromId].setLocalDescription(description).then(()=>{
+                          socketIdRef.current.emit("signal",fromId, JSON.stringify({"sdp":connections[fromId].localDescription}))
+                      }).catch(e => console.log(e))
+                    }).catch(e => console.log(e))
+                  }
+                }).catch(e => console.log(e))
+              }
+
+              if(signal.ice){
+                connections[fromId].addIceCandidate(new RTCIceCandidate(signal.ice)).catch(e =>console.log(e));
+              }
+      }
 }
 
 // to do
@@ -149,8 +186,79 @@ let addMessage =()=>{
      socketRef.current.on("user-joined", (id, clients)=>{
       clients.forEach((socketListId)=>{
 
-        connection[socketListId] = new RTCPeerConnection(peerConfigConnections);
+        connections[socketListId] = new RTCPeerConnection(peerConfigConnections);
+
+        connections[socketListId].onicecandidate =(event) =>{
+          if(event.candidate != null){
+            socketRef.current.emit("signal", socketListId, JSON.stringify({'ice':event.candidate}))
+          }
+        }
+
+        connections[socketListId].onaddstream = (event) =>{
+           
+             let videoExists = videoRef.current.find(video =>video.socketId == socketListId);
+
+             if(videoExists){
+              setVideo(videos => {
+                const updatevideos = videos.map(video => 
+                       video.socketId == socketListId ? {...video, stream: event.stram} : video
+                );
+
+                videoRef.current = updatevideos;
+                return updatevideos;
+              })
+
+
+             }else {
+                    
+                   let newVideo ={
+                    socketId: socketListId,
+                    stream: event.stream,
+                    autoPlay:true,
+                    playsinline:true
+                   }
+
+                   setVideos(videos =>{
+                      const updatevideos = [...videos, newVideo];
+                      videoRef.current = updatevideos;
+                      return updatevideos;
+                   })
+
+             }
+
+        };
+         
+        if(window.localStream !==undefined && window.localStream !== null){
+          connections[socketListId].addStream(window.localStream);
+        }else {
+          
+             
+
+        }
+
+
+
       })
+           if(id ===socketId.current){
+            for (let id2 in connections){
+              if(id2 ===socketIdRef.current) continue
+              try {
+                    connections[id2].addStream(window.localStream);
+              }catch (e) {
+
+              }
+
+              connections[id2].createOffer().then((description)=>{
+                     connections[id2].setLocalDescription(description)
+                     .then(()=>{
+                        socketRef.current.emit('signal', id2, JSON.stringify({"sdp": connections[id2].setLocalDescription}))
+                     })
+                     .catch (e =>console.log(e))
+              })
+            }
+           }
+
+
      })
 
     })
